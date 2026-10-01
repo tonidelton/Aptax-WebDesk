@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>WebDesk - Sua Área de Trabalho na Web</title>
+    <meta name="description" content="WebDesk - Uma área de trabalho completa no navegador. Organize atalhos, crie pastas e personalize seu espaço." />
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #1a1a2e;
+      }
+      html.dark, html.dark body {
+        background-color: #1a1a2e;
+        color: #ffffff;
+      }
+      html.light, html.light body {
+        background-color: #e8e8e8;
+        color: #000000;
+      }
+    </style>
+    <script>
+      // Aplica tema salvo antes do React carregar para evitar flash
+      (function() {
+        try {
+          const saved = localStorage.getItem('webdesk-state');
+          if (saved) {
+            const state = JSON.parse(saved);
+            if (state.theme === 'light' || state.theme === 'dark') {
+              document.documentElement.className = state.theme;
+            }
+          }
+        } catch(e) {}
+        if (!document.documentElement.className) {
+          document.documentElement.className = 'dark';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
