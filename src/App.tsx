@@ -124,7 +124,7 @@ function Desktop() {
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
 
   // Atalhos na área de trabalho (não em pastas)
-  const desktopShortcuts = shortcuts.filter((s) => !s.folderId);
+  const desktopShortcuts = shortcuts.filter((s) => s.folderId === null || s.folderId === undefined);
   const desktopFolders = folders;
 
   // Grid size
@@ -206,7 +206,7 @@ function Desktop() {
   return (
     <div
       ref={desktopRef}
-      className="absolute inset-0 bottom-[48px] z-10 overflow-hidden"
+      className="absolute inset-0 bottom-[48px] z-[1] overflow-hidden"
       onContextMenu={handleContextMenu}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
@@ -405,11 +405,11 @@ function WindowManager() {
   const { windows } = useStore();
 
   return (
-    <>
+    <div className="absolute inset-0 bottom-[48px] z-[100] pointer-events-none">
       {windows.map((win) => (
         <Window key={win.id} window={win} />
       ))}
-    </>
+    </div>
   );
 }
 
@@ -470,7 +470,7 @@ function Window({ window: win }: { window: WindowState }) {
   return (
     <div
       ref={windowRef}
-      className={`absolute window-container rounded-lg overflow-hidden shadow-2xl flex flex-col transition-shadow
+      className={`absolute window-container rounded-lg overflow-hidden shadow-2xl flex flex-col transition-shadow pointer-events-auto
         ${win.maximized ? '' : 'border border-gray-300/30'}
         dark:border-gray-600/50
       `}
@@ -919,6 +919,7 @@ function AboutContent() {
 function Taskbar() {
   const { windows, openWindow, setTheme, theme } = useStore();
   const [startOpen, setStartOpen] = useState(false);
+  const [showNewShortcut, setShowNewShortcut] = useState(false);
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -980,6 +981,17 @@ function Taskbar() {
           <span className="text-sm text-white font-medium hidden sm:inline">Iniciar</span>
         </button>
 
+        {/* New Shortcut Button */}
+        <button
+          onClick={() => setShowNewShortcut(true)}
+          className="h-9 px-2 rounded flex items-center gap-1 hover:bg-white/10 transition-colors"
+          aria-label="Novo atalho"
+          title="Novo atalho"
+        >
+          <Plus size={16} className="text-green-400" />
+          <span className="text-xs text-white hidden sm:inline">Novo</span>
+        </button>
+
         {/* Separator */}
         <div className="w-px h-6 bg-gray-600 mx-1" />
 
@@ -1022,6 +1034,18 @@ function Taskbar() {
 
       {/* Start Menu */}
       {startOpen && <StartMenu onClose={() => setStartOpen(false)} onOpenSettings={handleOpenSettings} onOpenTrash={handleOpenTrash} onOpenAbout={handleOpenAbout} />}
+
+      {/* New Shortcut Modal */}
+      {showNewShortcut && (
+        <ShortcutFormModal
+          onClose={() => setShowNewShortcut(false)}
+          onSave={(data) => {
+            useStore.getState().addShortcut(data);
+            setShowNewShortcut(false);
+            showToast('Atalho criado com sucesso!', 'success');
+          }}
+        />
+      )}
     </>
   );
 }
@@ -1311,7 +1335,8 @@ function ContextMenu() {
 
   useEffect(() => {
     if (!contextMenu.visible) return;
-    const handleClick = (e: MouseEvent) => {
+    // Use mousedown instead of click to avoid conflicts with contextmenu event
+    const handleMouseDown = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         hideContextMenu();
       }
@@ -1319,10 +1344,14 @@ function ContextMenu() {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') hideContextMenu();
     };
-    document.addEventListener('click', handleClick);
-    document.addEventListener('keydown', handleEsc);
+    // Delay adding listener to avoid closing immediately
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleMouseDown);
+      document.addEventListener('keydown', handleEsc);
+    }, 10);
     return () => {
-      document.removeEventListener('click', handleClick);
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('keydown', handleEsc);
     };
   }, [contextMenu.visible]);
