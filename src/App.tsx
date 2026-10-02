@@ -63,6 +63,8 @@ export default function App() {
       <Taskbar />
       {/* Context Menu */}
       <ContextMenu />
+      {/* Global Modals (survive context menu closing) */}
+      <GlobalModals />
       {/* Toast notifications */}
       <ToastContainer />
     </div>
@@ -121,7 +123,6 @@ function Desktop() {
   const desktopRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragItem, setDragItem] = useState<{ id: string; type: 'shortcut' | 'folder' } | null>(null);
-  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
 
   // Atalhos na área de trabalho (não em pastas)
   const desktopShortcuts = shortcuts.filter((s) => s.folderId === null || s.folderId === undefined);
@@ -129,23 +130,7 @@ function Desktop() {
 
   // Grid size
   const GRID_SIZE = 90;
-  const GRID_COLS = Math.max(1, Math.floor((window.innerWidth - 40) / GRID_SIZE));
-
-  const getNextPosition = useCallback(() => {
-    const occupied = new Set<string>();
-    desktopShortcuts.forEach((s) => {
-      if (s.position) occupied.add(`${s.position.x},${s.position.y}`);
-    });
-    desktopFolders.forEach((f) => {
-      if (f.position) occupied.add(`${f.position.x},${f.position.y}`);
-    });
-    for (let y = 0; y < 100; y++) {
-      for (let x = 0; x < GRID_COLS; x++) {
-        if (!occupied.has(`${x},${y}`)) return { x, y };
-      }
-    }
-    return { x: 0, y: 0 };
-  }, [desktopShortcuts, desktopFolders, GRID_COLS]);
+  const GRID_PADDING = 12;
 
   // Handle right-click on desktop
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -158,18 +143,12 @@ function Desktop() {
     });
   };
 
-  // Handle click on empty area
+  // Handle click on empty area - verifica se clicou no desktop ou no container interno
   const handleClick = (e: React.MouseEvent) => {
-    if (e.target === desktopRef.current) {
+    const target = e.target as HTMLElement;
+    if (target === desktopRef.current || target.dataset.desktopContainer === 'true') {
       setSelectedId(null);
       hideContextMenu();
-    }
-  };
-
-  // Handle double-click on empty area
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    if (e.target === desktopRef.current) {
-      // Could open new shortcut dialog
     }
   };
 
@@ -183,8 +162,8 @@ function Desktop() {
     if (!dragItem) return;
     const rect = desktopRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const x = Math.floor((e.clientX - rect.left) / GRID_SIZE);
-    const y = Math.floor((e.clientY - rect.top) / GRID_SIZE);
+    const x = Math.floor((e.clientX - rect.left - GRID_PADDING) / GRID_SIZE);
+    const y = Math.floor((e.clientY - rect.top - GRID_PADDING) / GRID_SIZE);
     const pos = { x: Math.max(0, x), y: Math.max(0, y) };
 
     if (dragItem.type === 'shortcut') {
@@ -193,14 +172,10 @@ function Desktop() {
       useStore.getState().updateFolderPosition(dragItem.id, pos);
     }
     setDragItem(null);
-    setDragPos(null);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    const rect = desktopRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setDragPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
 
   return (
@@ -209,12 +184,15 @@ function Desktop() {
       className="absolute inset-0 bottom-[48px] z-[1] overflow-hidden"
       onContextMenu={handleContextMenu}
       onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      {/* Ícones na área de trabalho */}
-      <div className="p-3 flex flex-col flex-wrap gap-1 h-full content-start">
+      {/* Container interno para capturar cliques */}
+      <div 
+        className="relative w-full h-full p-3"
+        data-desktop-container="true"
+      >
+        {/* Pastas posicionadas */}
         {desktopFolders.map((folder) => (
           <DesktopIcon
             key={folder.id}
@@ -226,6 +204,7 @@ function Desktop() {
             gridSize={GRID_SIZE}
           />
         ))}
+        {/* Atalhos posicionados */}
         {desktopShortcuts.map((shortcut) => (
           <DesktopIcon
             key={shortcut.id}
@@ -258,7 +237,7 @@ function DesktopIcon({
   onDragStart: () => void;
   gridSize: number;
 }) {
-  const { setContextMenu, openWindow, deleteShortcut, deleteFolder, updateShortcut, updateFolder } = useStore();
+  const { setContextMenu, openWindow, updateShortcut, updateFolder } = useStore();
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(item.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -270,7 +249,13 @@ function DesktopIcon({
     }
   }, [renaming]);
 
-  const handleDoubleClick = () => {
+  // Calcula posição absoluta baseada na posição salva
+  const position = item.position || { x: 0, y: 0 };
+  const left = 12 + position.x * gridSize;
+  const top = 12 + position.y * gridSize;
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (type === 'shortcut') {
       const shortcut = item as Shortcut;
       openWindow({
@@ -278,8 +263,8 @@ function DesktopIcon({
         icon: shortcut.icon,
         type: 'shortcut',
         shortcutId: shortcut.id,
-        x: 100 + Math.random() * 100,
-        y: 50 + Math.random() * 50,
+        x: Math.min(100 + Math.random() * 100, window.innerWidth - 400),
+        y: Math.min(50 + Math.random() * 50, window.innerHeight - 300),
         width: Math.min(900, window.innerWidth - 100),
         height: Math.min(600, window.innerHeight - 150),
       });
@@ -290,8 +275,8 @@ function DesktopIcon({
         icon: folder.icon,
         type: 'folder',
         folderId: folder.id,
-        x: 150 + Math.random() * 100,
-        y: 80 + Math.random() * 50,
+        x: Math.min(150 + Math.random() * 100, window.innerWidth - 400),
+        y: Math.min(80 + Math.random() * 50, window.innerHeight - 300),
         width: Math.min(700, window.innerWidth - 100),
         height: Math.min(500, window.innerHeight - 150),
       });
@@ -322,11 +307,6 @@ function DesktopIcon({
     setRenaming(false);
   };
 
-  const isEmoji = (str: string) => {
-    const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F000}-\u{1F02F}]|[\u{1F0A0}-\u{1F0FF}]|[\u{1F100}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]/u;
-    return emojiRegex.test(str);
-  };
-
   const renderIcon = () => {
     if (type === 'folder') {
       return <span className="text-4xl">{(item as Folder).icon}</span>;
@@ -339,7 +319,7 @@ function DesktopIcon({
           alt={shortcut.name}
           className="w-10 h-10 rounded-lg object-cover"
           onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
+            (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="80">🌐</text></svg>';
           }}
         />
       );
@@ -359,10 +339,15 @@ function DesktopIcon({
 
   return (
     <div
-      className={`desktop-icon flex flex-col items-center justify-center p-2 rounded-lg cursor-pointer select-none transition-all duration-150 group
+      className={`desktop-icon absolute flex flex-col items-center justify-center p-2 rounded-lg cursor-pointer select-none transition-all duration-150 group
         ${selected ? 'bg-white/20 ring-1 ring-white/40' : 'hover:bg-white/10'}
       `}
-      style={{ width: gridSize - 8, height: gridSize - 8 }}
+      style={{ 
+        width: gridSize - 8, 
+        height: gridSize - 8,
+        left,
+        top,
+      }}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
@@ -390,6 +375,7 @@ function DesktopIcon({
           }}
           className="mt-1 text-xs text-center bg-white/90 text-gray-900 rounded px-1 w-full outline-none"
           onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
         />
       ) : (
         <span className="mt-1 text-xs text-white text-center leading-tight drop-shadow-md truncate w-full px-1">
@@ -437,14 +423,14 @@ function Window({ window: win }: { window: WindowState }) {
       if (isDragging) {
         const dx = e.clientX - dragStart.current.x;
         const dy = e.clientY - dragStart.current.y;
-        updateWindowPosition(win.id, dragStart.current.winX + dx, dragStart.current.winY + dy);
+        useStore.getState().updateWindowPosition(win.id, dragStart.current.winX + dx, dragStart.current.winY + dy);
       }
       if (isResizing) {
         const dx = e.clientX - resizeStart.current.x;
         const dy = e.clientY - resizeStart.current.y;
         const newW = Math.max(300, resizeStart.current.w + dx);
         const newH = Math.max(200, resizeStart.current.h + dy);
-        updateWindowSize(win.id, newW, newH);
+        useStore.getState().updateWindowSize(win.id, newW, newH);
       }
     };
 
@@ -555,6 +541,17 @@ function ShortcutContent({ shortcutId }: { shortcutId: string }) {
   const [iframeError, setIframeError] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Timeout para evitar loading infinito
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loading) {
+        // Se ainda está carregando após 10 segundos, mostra opção de abrir em nova aba
+        setLoading(false);
+      }
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   if (!shortcut) return <div className="p-4 text-gray-500">Atalho não encontrado</div>;
 
   if (iframeError) {
@@ -583,8 +580,18 @@ function ShortcutContent({ shortcutId }: { shortcutId: string }) {
   return (
     <div className="relative h-full">
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-700 gap-4 z-10">
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+          <a
+            href={shortcut.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors flex items-center gap-1"
+          >
+            <ExternalLink size={12} />
+            Abrir em nova aba
+          </a>
         </div>
       )}
       <iframe
@@ -595,17 +602,6 @@ function ShortcutContent({ shortcutId }: { shortcutId: string }) {
         onError={() => { setIframeError(true); setLoading(false); }}
         sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
       />
-      {/* Fallback: se o iframe carregar mas o conteúdo for bloqueado */}
-      {loading && (
-        <div className="absolute bottom-4 right-4">
-          <button
-            onClick={() => { setIframeError(true); setLoading(false); }}
-            className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 underline"
-          >
-            Não carregou? Clique aqui
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -919,7 +915,6 @@ function AboutContent() {
 function Taskbar() {
   const { windows, openWindow, setTheme, theme } = useStore();
   const [startOpen, setStartOpen] = useState(false);
-  const [showNewShortcut, setShowNewShortcut] = useState(false);
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -983,7 +978,7 @@ function Taskbar() {
 
         {/* New Shortcut Button */}
         <button
-          onClick={() => setShowNewShortcut(true)}
+          onClick={() => setGlobalModal({ showNewShortcut: true })}
           className="h-9 px-2 rounded flex items-center gap-1 hover:bg-white/10 transition-colors"
           aria-label="Novo atalho"
           title="Novo atalho"
@@ -1034,18 +1029,6 @@ function Taskbar() {
 
       {/* Start Menu */}
       {startOpen && <StartMenu onClose={() => setStartOpen(false)} onOpenSettings={handleOpenSettings} onOpenTrash={handleOpenTrash} onOpenAbout={handleOpenAbout} />}
-
-      {/* New Shortcut Modal */}
-      {showNewShortcut && (
-        <ShortcutFormModal
-          onClose={() => setShowNewShortcut(false)}
-          onSave={(data) => {
-            useStore.getState().addShortcut(data);
-            setShowNewShortcut(false);
-            showToast('Atalho criado com sucesso!', 'success');
-          }}
-        />
-      )}
     </>
   );
 }
@@ -1053,7 +1036,7 @@ function Taskbar() {
 // ========== TASKBAR PINNED ==========
 function TaskbarPinned() {
   const { shortcuts, openWindow, windows } = useStore();
-  const pinned = shortcuts.filter((s) => s.pinnedTaskbar && !s.folderId);
+  const pinned = shortcuts.filter((s) => s.pinnedTaskbar && (s.folderId === null || s.folderId === undefined));
 
   return (
     <div className="flex items-center gap-1">
@@ -1167,7 +1150,7 @@ function StartMenu({
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  const desktopShortcuts = shortcuts.filter((s) => !s.folderId);
+  const desktopShortcuts = shortcuts.filter((s) => s.folderId === null || s.folderId === undefined);
   const pinnedShortcuts = desktopShortcuts.filter((s) => s.pinnedStart);
   const filteredShortcuts = search
     ? desktopShortcuts.filter((s) =>
@@ -1326,11 +1309,70 @@ function StartMenu({
 }
 
 // ========== CONTEXT MENU ==========
+// Estado global para modais (evita que sejam destruídos quando o menu fecha)
+let globalModalState = {
+  showNewShortcut: false,
+  editingShortcut: null as Shortcut | null,
+  showNewFolder: false,
+};
+let modalListeners: (() => void)[] = [];
+
+function setGlobalModal(updates: Partial<typeof globalModalState>) {
+  globalModalState = { ...globalModalState, ...updates };
+  modalListeners.forEach((l) => l());
+}
+
+function GlobalModals() {
+  const [, setTick] = useState(0);
+  const { addShortcut, addFolder, updateShortcut } = useStore();
+
+  useEffect(() => {
+    const listener = () => setTick((t) => t + 1);
+    modalListeners.push(listener);
+    return () => {
+      modalListeners = modalListeners.filter((l) => l !== listener);
+    };
+  }, []);
+
+  return (
+    <>
+      {globalModalState.showNewShortcut && (
+        <ShortcutFormModal
+          onClose={() => setGlobalModal({ showNewShortcut: false })}
+          onSave={(data) => {
+            addShortcut(data);
+            setGlobalModal({ showNewShortcut: false });
+            showToast('Atalho criado com sucesso!', 'success');
+          }}
+        />
+      )}
+      {globalModalState.editingShortcut && (
+        <ShortcutFormModal
+          shortcut={globalModalState.editingShortcut}
+          onClose={() => setGlobalModal({ editingShortcut: null })}
+          onSave={(data) => {
+            updateShortcut(globalModalState.editingShortcut!.id, data);
+            setGlobalModal({ editingShortcut: null });
+            showToast('Atalho atualizado!', 'success');
+          }}
+        />
+      )}
+      {globalModalState.showNewFolder && (
+        <FolderFormModal
+          onClose={() => setGlobalModal({ showNewFolder: false })}
+          onSave={(name) => {
+            addFolder(name);
+            setGlobalModal({ showNewFolder: false });
+            showToast('Pasta criada!', 'success');
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 function ContextMenu() {
-  const { contextMenu, hideContextMenu, addShortcut, addFolder, deleteShortcut, deleteFolder, updateShortcut, togglePinTaskbar, togglePinStart, shortcuts, folders } = useStore();
-  const [showNewShortcut, setShowNewShortcut] = useState(false);
-  const [editingShortcut, setEditingShortcut] = useState<Shortcut | null>(null);
-  const [showNewFolder, setShowNewFolder] = useState(false);
+  const { contextMenu, hideContextMenu, deleteShortcut, deleteFolder, togglePinTaskbar, togglePinStart, shortcuts, folders } = useStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1374,98 +1416,82 @@ function ContextMenu() {
   };
 
   return (
-    <>
-      <div
-        ref={menuRef}
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 py-1 min-w-[200px] animate-fade-in"
-        style={menuStyle}
-      >
-        {contextMenu.type === 'desktop' && (
-          <>
-            <MenuItem icon={<Plus size={14} />} label="Novo atalho" onClick={() => { setShowNewShortcut(true); hideContextMenu(); }} />
-            <MenuItem icon={<FolderPlus size={14} />} label="Nova pasta" onClick={() => { setShowNewFolder(true); hideContextMenu(); }} />
-            <div className="border-t border-gray-200 dark:border-gray-600 my-1" />
-            <MenuItem icon={<Settings size={14} />} label="Configurações" onClick={() => {
-              useStore.getState().openWindow({
-                title: 'Configurações',
-                icon: '⚙️',
-                type: 'settings',
-                x: 200,
-                y: 100,
-                width: 600,
-                height: 500,
-              });
-              hideContextMenu();
-            }} />
-            <MenuItem icon={<Trash2 size={14} />} label="Lixeira" onClick={() => {
-              useStore.getState().openWindow({
-                title: 'Lixeira',
-                icon: '🗑️',
-                type: 'trash',
-                x: 250,
-                y: 120,
-                width: 500,
-                height: 400,
-              });
-              hideContextMenu();
-            }} />
-          </>
-        )}
-
-        {contextMenu.type === 'shortcut' && targetShortcut && (
-          <>
-            <MenuItem icon={<Edit3 size={14} />} label="Renomear" onClick={() => { setEditingShortcut(targetShortcut); hideContextMenu(); }} />
-            <MenuItem
-              icon={targetShortcut.pinnedTaskbar ? <PinOff size={14} /> : <Pin size={14} />}
-              label={targetShortcut.pinnedTaskbar ? 'Desafixar da barra' : 'Fixar na barra'}
-              onClick={() => { togglePinTaskbar(targetShortcut.id); hideContextMenu(); }}
-            />
-            <MenuItem
-              icon={targetShortcut.pinnedStart ? <PinOff size={14} /> : <Pin size={14} />}
-              label={targetShortcut.pinnedStart ? 'Desafixar do início' : 'Fixar no início'}
-              onClick={() => { togglePinStart(targetShortcut.id); hideContextMenu(); }}
-            />
-            <div className="border-t border-gray-200 dark:border-gray-600 my-1" />
-            <MenuItem icon={<Trash2 size={14} />} label="Excluir" onClick={() => { deleteShortcut(targetShortcut.id); hideContextMenu(); showToast('Movido para a lixeira', 'info'); }} danger />
-          </>
-        )}
-
-        {contextMenu.type === 'folder' && targetFolder && (
-          <>
-            <MenuItem icon={<Edit3 size={14} />} label="Renomear" onClick={() => {
-              const newName = prompt('Novo nome da pasta:', targetFolder.name);
-              if (newName?.trim()) {
-                useStore.getState().updateFolder(targetFolder.id, { name: newName.trim() });
-              }
-              hideContextMenu();
-            }} />
-            <div className="border-t border-gray-200 dark:border-gray-600 my-1" />
-            <MenuItem icon={<Trash2 size={14} />} label="Excluir pasta" onClick={() => { deleteFolder(targetFolder.id); hideContextMenu(); showToast('Pasta excluída (atalhos movidos para a área de trabalho)', 'info'); }} danger />
-          </>
-        )}
-      </div>
-
-      {/* Modals */}
-      {showNewShortcut && (
-        <ShortcutFormModal
-          onClose={() => setShowNewShortcut(false)}
-          onSave={(data) => { addShortcut(data); setShowNewShortcut(false); showToast('Atalho criado!', 'success'); }}
-        />
+    <div
+      ref={menuRef}
+      className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 py-1 min-w-[200px] animate-fade-in"
+      style={menuStyle}
+    >
+      {contextMenu.type === 'desktop' && (
+        <>
+          <MenuItem icon={<Plus size={14} />} label="Novo atalho" onClick={() => { hideContextMenu(); setGlobalModal({ showNewShortcut: true }); }} />
+          <MenuItem icon={<FolderPlus size={14} />} label="Nova pasta" onClick={() => { hideContextMenu(); setGlobalModal({ showNewFolder: true }); }} />
+          <div className="border-t border-gray-200 dark:border-gray-600 my-1" />
+          <MenuItem icon={<Settings size={14} />} label="Configurações" onClick={() => {
+            useStore.getState().openWindow({
+              title: 'Configurações',
+              icon: '⚙️',
+              type: 'settings',
+              x: 200,
+              y: 100,
+              width: 600,
+              height: 500,
+            });
+            hideContextMenu();
+          }} />
+          <MenuItem icon={<Trash2 size={14} />} label="Lixeira" onClick={() => {
+            useStore.getState().openWindow({
+              title: 'Lixeira',
+              icon: '🗑️',
+              type: 'trash',
+              x: 250,
+              y: 120,
+              width: 500,
+              height: 400,
+            });
+            hideContextMenu();
+          }} />
+        </>
       )}
-      {editingShortcut && (
-        <ShortcutFormModal
-          shortcut={editingShortcut}
-          onClose={() => setEditingShortcut(null)}
-          onSave={(data) => { updateShortcut(editingShortcut.id, data); setEditingShortcut(null); showToast('Atalho atualizado!', 'success'); }}
-        />
+
+      {contextMenu.type === 'shortcut' && targetShortcut && (
+        <>
+          <MenuItem icon={<Edit3 size={14} />} label="Editar" onClick={() => { hideContextMenu(); setGlobalModal({ editingShortcut: targetShortcut }); }} />
+          <MenuItem icon={<Edit3 size={14} />} label="Renomear" onClick={() => {
+            const newName = prompt('Novo nome:', targetShortcut.name);
+            if (newName?.trim()) {
+              useStore.getState().updateShortcut(targetShortcut.id, { name: newName.trim() });
+            }
+            hideContextMenu();
+          }} />
+          <MenuItem
+            icon={targetShortcut.pinnedTaskbar ? <PinOff size={14} /> : <Pin size={14} />}
+            label={targetShortcut.pinnedTaskbar ? 'Desafixar da barra' : 'Fixar na barra'}
+            onClick={() => { togglePinTaskbar(targetShortcut.id); hideContextMenu(); }}
+          />
+          <MenuItem
+            icon={targetShortcut.pinnedStart ? <PinOff size={14} /> : <Pin size={14} />}
+            label={targetShortcut.pinnedStart ? 'Desafixar do início' : 'Fixar no início'}
+            onClick={() => { togglePinStart(targetShortcut.id); hideContextMenu(); }}
+          />
+          <div className="border-t border-gray-200 dark:border-gray-600 my-1" />
+          <MenuItem icon={<Trash2 size={14} />} label="Excluir" onClick={() => { deleteShortcut(targetShortcut.id); hideContextMenu(); showToast('Movido para a lixeira', 'info'); }} danger />
+        </>
       )}
-      {showNewFolder && (
-        <FolderFormModal
-          onClose={() => setShowNewFolder(false)}
-          onSave={(name) => { addFolder(name); setShowNewFolder(false); showToast('Pasta criada!', 'success'); }}
-        />
+
+      {contextMenu.type === 'folder' && targetFolder && (
+        <>
+          <MenuItem icon={<Edit3 size={14} />} label="Renomear" onClick={() => {
+            const newName = prompt('Novo nome da pasta:', targetFolder.name);
+            if (newName?.trim()) {
+              useStore.getState().updateFolder(targetFolder.id, { name: newName.trim() });
+            }
+            hideContextMenu();
+          }} />
+          <div className="border-t border-gray-200 dark:border-gray-600 my-1" />
+          <MenuItem icon={<Trash2 size={14} />} label="Excluir pasta" onClick={() => { deleteFolder(targetFolder.id); hideContextMenu(); showToast('Pasta excluída (atalhos movidos para a área de trabalho)', 'info'); }} danger />
+        </>
       )}
-    </>
+    </div>
   );
 }
 

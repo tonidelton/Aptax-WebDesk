@@ -113,7 +113,9 @@ export const useStore = create<WebDeskStore>((set, get) => ({
       if (!newShortcut.position || (newShortcut.position.x === 0 && newShortcut.position.y === 0)) {
         const occupied = new Set<string>();
         state.shortcuts.forEach((s) => {
-          if (s.position && !s.folderId) occupied.add(`${s.position.x},${s.position.y}`);
+          if (s.position && (s.folderId === null || s.folderId === undefined)) {
+            occupied.add(`${s.position.x},${s.position.y}`);
+          }
         });
         state.folders.forEach((f) => {
           if (f.position) occupied.add(`${f.position.x},${f.position.y}`);
@@ -240,14 +242,36 @@ export const useStore = create<WebDeskStore>((set, get) => ({
 
   // === PASTAS ===
   addFolder: (name, position) => {
-    const folder: Folder = {
-      id: generateId(),
-      name,
-      icon: '📁',
-      position: position || { x: 0, y: 0 },
-      createdAt: Date.now(),
-    };
     set((state) => {
+      let finalPosition = position;
+      if (!finalPosition || (finalPosition.x === 0 && finalPosition.y === 0)) {
+        const occupied = new Set<string>();
+        state.shortcuts.forEach((s) => {
+          if (s.position && (s.folderId === null || s.folderId === undefined)) {
+            occupied.add(`${s.position.x},${s.position.y}`);
+          }
+        });
+        state.folders.forEach((f) => {
+          if (f.position) occupied.add(`${f.position.x},${f.position.y}`);
+        });
+        const cols = Math.max(1, Math.floor((typeof window !== 'undefined' ? window.innerWidth : 1200) - 40) / 90);
+        for (let y = 0; y < 100; y++) {
+          for (let x = 0; x < cols; x++) {
+            if (!occupied.has(`${x},${y}`)) {
+              finalPosition = { x, y };
+              break;
+            }
+          }
+          if (finalPosition) break;
+        }
+      }
+      const folder: Folder = {
+        id: generateId(),
+        name,
+        icon: '📁',
+        position: finalPosition || { x: 0, y: 0 },
+        createdAt: Date.now(),
+      };
       const folders = [...state.folders, folder];
       const newState = { ...state, folders };
       saveState(newState);
