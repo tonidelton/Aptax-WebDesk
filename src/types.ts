@@ -63,18 +63,28 @@ export interface ContextMenuState {
   targetId?: string;
 }
 
-// Papéis de parede pré-definidos
+// Papéis de parede pré-definidos (estilo iOS)
 export const WALLPAPERS = [
+  // iOS 16 - Colorful swirls
+  'linear-gradient(135deg, #ff6b6b 0%, #feca57 25%, #48dbfb 50%, #ff9ff3 75%, #54a0ff 100%)',
+  // iOS 17 - Blue/Purple
+  'linear-gradient(160deg, #0093E9 0%, #80D0C7 100%)',
+  // iOS - Pink/Orange sunset
+  'linear-gradient(135deg, #FF9A8B 0%, #FF6A88 50%, #FF99AC 100%)',
+  // iOS - Deep Blue
+  'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #4b79a1 100%)',
+  // iOS - Purple Dream
   'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  // iOS - Green/Teal
+  'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+  // iOS - Cosmic
+  'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)',
+  // iOS - Warm
   'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+  // iOS - Ocean
   'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-  'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
-  'linear-gradient(135deg, #fccb90 0%, #d57eeb 100%)',
-  'linear-gradient(135deg, #0c3483 0%, #a2b6df 50%, #6b8cce 100%)',
-  'linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%)',
-  'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
+  // iOS - Aurora
+  'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
 ];
 
 // Categorias padrão

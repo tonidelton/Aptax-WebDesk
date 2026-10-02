@@ -1,8 +1,22 @@
-# 🖥️ WebDesk - Sua Área de Trabalho na Web
+# 🍎 WebDesk - Sua Área de Trabalho na Web (iOS Edition)
 
-WebDesk é um aplicativo web que simula uma área de trabalho estilo Windows, onde o usuário pode instalar, abrir e organizar atalhos para sites e mini-apps.
+WebDesk é um aplicativo web com visual inspirado no iOS da Apple, onde o usuário pode instalar, abrir e organizar atalhos para sites e mini-apps.
 
 ![WebDesk](https://img.shields.io/badge/React-18-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue) ![Tailwind](https://img.shields.io/badge/Tailwind-4-purple)
+
+## 🎨 Visual iOS
+
+O WebDesk foi redesenhado com a estética do iOS:
+
+- **Dock inferior** com glassmorphism (efeito de vidro fosco)
+- **Ícones squircle** (formato característico do iOS) com gradientes
+- **Status bar** no topo com hora, Wi-Fi e bateria
+- **Spotlight Search** (Cmd/Ctrl + F) para busca rápida
+- **Janelas com traffic lights** (botões vermelho/amarelo/verde)
+- **Animações spring** suaves estilo iOS
+- **Paleta de cores iOS** (azul #007AFF, verde #34C759, etc.)
+- **Glass morphism** em menus e modais
+- **Wallpapers iOS** com gradientes vibrantes
 
 ## ✨ Funcionalidades
 
